@@ -31,7 +31,7 @@ func newRedis(url string) (Storer, error) {
 }
 
 // Entry implements Storer Entry method for redisdb database
-func (r *redisStore) Entry(ctx context.Context, staticPubKey cipher.PubKey) (*disc.Entry, error) {
+func (r *redisStore) Entry(_ context.Context, staticPubKey cipher.PubKey) (*disc.Entry, error) {
 	payload, err := r.client.Get(staticPubKey.Hex()).Bytes()
 	if err != nil {
 		if err == redis.Nil {
@@ -48,7 +48,7 @@ func (r *redisStore) Entry(ctx context.Context, staticPubKey cipher.PubKey) (*di
 }
 
 // Entry implements Storer Entry method for redisdb database
-func (r *redisStore) SetEntry(ctx context.Context, entry *disc.Entry) error {
+func (r *redisStore) SetEntry(_ context.Context, entry *disc.Entry) error {
 	payload, err := json.Marshal(entry)
 	if err != nil {
 		return disc.ErrUnexpected
@@ -70,7 +70,7 @@ func (r *redisStore) SetEntry(ctx context.Context, entry *disc.Entry) error {
 }
 
 // AvailableServers implements Storer AvailableServers method for redisdb database
-func (r *redisStore) AvailableServers(ctx context.Context, maxCount int) ([]*disc.Entry, error) {
+func (r *redisStore) AvailableServers(_ context.Context, maxCount int) ([]*disc.Entry, error) {
 	var entries []*disc.Entry
 
 	pks, err := r.client.SRandMemberN("servers", int64(maxCount)).Result()

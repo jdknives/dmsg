@@ -4,6 +4,7 @@ import (
 	"context"
 	"net"
 	"sync"
+	"time"
 
 	"github.com/SkycoinProject/skycoin/src/util/logging"
 	"github.com/sirupsen/logrus"
@@ -72,6 +73,8 @@ func (s *Server) Serve(lis net.Listener, addr string) error {
 	if err := s.updateEntryLoop(addr); err != nil {
 		return err
 	}
+	// Check the existence of our entry every 10s.
+	go s.checkEntryLoop(time.Second*10, addr)
 
 	log.Info("Accepting sessions...")
 	s.readyOnce.Do(func() { close(s.ready) })
@@ -111,6 +114,38 @@ func (s *Server) updateEntryLoop(addr string) error {
 	return netutil.NewDefaultRetrier(s.log).Do(ctx, func() error {
 		return s.updateServerEntry(ctx, addr)
 	})
+}
+
+// checkEntryLoop polls the dmsg discovery to ensure the server's entry is still up.
+func (s *Server) checkEntryLoop(retry time.Duration, addr string) {
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		<-s.done
+		cancel()
+	}()
+
+	t := time.NewTicker(retry)
+	for {
+		select {
+		case <-t.C:
+			if _, err := s.dc.Entry(ctx, s.pk); err != nil {
+				s.log.
+					WithError(err).
+					Warn("checkEntryLoop: Failed to obtain our entry from dmsg discovery. Updating entry...")
+				if err := s.updateEntryLoop(addr); err != nil {
+					s.log.
+						WithError(err).
+						Warn("checkEntryLoop: failed to update entry. Retrying...")
+					continue
+				}
+				s.log.
+					Info("checkEntryLoop: Entry updated.")
+			}
+		case <-s.done:
+			t.Stop()
+			return
+		}
+	}
 }
 
 func (s *Server) handleSession(conn net.Conn) {
